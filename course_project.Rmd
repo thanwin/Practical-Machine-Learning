@@ -1,0 +1,126 @@
+---
+title: "Practical Machine Learning Course Project"
+author: "Than Win"
+date: "07/28/2015"
+output: html_document
+---
+
+Executive Summary
+------
+This paper will demonstrate the prediction on the manner of the participents by using carent package taught in the Practical Machine Learning class at Cousera.
+
+Background
+-----
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). 
+
+Getting Data 
+----
+To be able to avoid multiple downloading, the data is saved as rds on local disk.
+```{r}
+#library(curl)
+#trainURL <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+#testURL <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+#trainData <- read.csv(curl(trainURL), na.strings=c("NA","#DIV/0!",""))
+#testData <- read.csv(curl(testURL), na.strings=c("NA","#DIV/0!",""))
+
+#saveRDS(trainData, file='trainData.rds')
+#saveRDS(testData, file='testData.rds')
+
+trainData <- readRDS("/home/ict/trainData.rds")
+testData <- readRDS("/home/ict/testData.rds")
+```
+
+Explore the data
+--------
+```{r}
+#head(trainData)
+dim(trainData)
+#str(trainData)
+
+#head(testData)
+dim(testData)
+#str(trainData$classe)
+```
+
+Cleaning the data
+------
+
+```{r}
+#remove NA
+trainData <- trainData[, colSums(is.na(trainData)) == 0]
+
+#remove unrelevant vars
+rm = c('X', 'user_name', 'raw_timestamp_part_1', 'raw_timestamp_part_2', 'cvtd_timestamp', 'new_window', 'num_window')
+
+trainData <- trainData [, -which(names(trainData) %in% rm)]
+```
+
+Screening the data
+------
+```{r}
+library(caret)
+#remove Non Zero Value
+nzv <- nearZeroVar(trainData, saveMetrics=TRUE)
+trainData <- trainData[, nzv [, 'nzv'] == 0]
+
+#find correlation between vars
+corMat <- cor(na.omit(trainData[sapply(trainData, is.numeric)]))
+dim(corMat)
+
+#remove cutoff
+nocor <- findCorrelation(corMat, cutoff=0.9, verbose=TRUE)
+trainData <- trainData[,-nocor]
+```
+
+Split data for training and cross validation
+-----
+```{r}
+#trainData is further divided into trainDF and validateDF 
+train <- createDataPartition(y=trainData$classe, p=0.7, list=FALSE)
+trainDF <- trainData[train,]
+validateDF <- trainData[-train,]
+dim(trainDF)
+dim(validateDF)
+```
+
+rpart prediction
+------
+```{r}
+set.seed(125)
+#rpart train
+library(rpart)
+rpartFit <- train(classe ~., method='rpart', data=trainDF)
+library(rattle)
+fancyRpartPlot(rpartFit$finalModel)
+
+#rpart cross validate
+rpartPred <- predict(rpartFit, newdata=validateDF)
+print(confusionMatrix(rpartPred, validateDF$classe), digits=4)
+```
+
+randomForest prediction
+------
+```{r}
+#random forest
+library('randomForest')
+#rfFit <- train(classe ~., method='rf', data=trainDF, trControl=trainControl(method="cv",number=5), prox=TRUE, allowParallel=TRUE)
+#rfPred <- predict(rfFit, newdata=validateDF)
+
+#saveRDS(rfFit, file='rfFit.rds')
+#saveRDS(rfPred, file='rfPred.rds')
+
+rfFit <- readRDS("/home/ict/rfFit.rds")
+rfPred <- readRDS("/home/ict/rfPred.rds")
+
+print(confusionMatrix(rfPred, validateDF$classe), digits=4)
+```
+
+Conclusion
+----
+Predict the testing data
+```{r}
+#redict testing data set
+testPred <- predict(rfFit, newdata=testData)
+testPred
+```
